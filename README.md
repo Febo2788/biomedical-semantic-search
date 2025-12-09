@@ -147,16 +147,6 @@ On 98 indexed PubMed abstracts:
 - MRR: Mean Reciprocal Rank
 - NDCG: Normalized Discounted Cumulative Gain
 
-## Skills Demonstrated
-
-- **Python**: Core language for all components
-- **Machine Learning**: Embedding models, semantic similarity
-- **Hugging Face**: Transformers, sentence-transformers
-- **PyTorch**: ML framework (CPU inference)
-- **Vector Databases**: ChromaDB, similarity search
-- **API Development**: FastAPI, REST design
-- **Data Engineering**: PubMed API, XML parsing, batch processing
-- **Evaluation**: Standard IR metrics
 
 ## Author
 
