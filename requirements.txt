@@ -1,0 +1,22 @@
+# Biomedical Semantic Search - Dependencies
+# Install with: pip install -r requirements.txt
+
+# ML/AI
+torch>=2.0.0
+transformers>=4.30.0
+sentence-transformers>=2.2.0
+
+# Vector Database
+chromadb>=0.4.0
+
+# API
+fastapi>=0.100.0
+uvicorn>=0.22.0
+
+# Data & Utils
+requests>=2.28.0
+numpy>=1.24.0
+pydantic>=2.0.0
+
+# Testing
+httpx>=0.24.0
