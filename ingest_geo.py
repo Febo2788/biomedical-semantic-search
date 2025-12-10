@@ -22,8 +22,9 @@ class GEOFetcher:
 
     BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 
-    def __init__(self, email: str = "user@example.com"):
+    def __init__(self, email: str = "felix.borrego02@gmail.com", api_key: str = "745f2b98fc7384ec80b6c74e4636087a2508"):
         self.email = email
+        self.api_key = api_key
 
     def search_datasets(self, query: str, max_results: int = 50) -> List[str]:
         """
@@ -41,7 +42,8 @@ class GEOFetcher:
             "term": f"{query} AND gse[Entry Type]",
             "retmax": max_results,
             "retmode": "json",
-            "email": self.email
+            "email": self.email,
+            "api_key": self.api_key
         }
 
         response = requests.get(f"{self.BASE_URL}/esearch.fcgi", params=params)
@@ -52,12 +54,13 @@ class GEOFetcher:
 
         return gds_ids
 
-    def fetch_dataset_info(self, gds_ids: List[str]) -> List[Dict[str, Any]]:
+    def fetch_dataset_info(self, gds_ids: List[str], batch_size: int = 100) -> List[Dict[str, Any]]:
         """
-        Fetch detailed info for GEO datasets.
+        Fetch detailed info for GEO datasets with batching.
 
         Args:
             gds_ids: List of GDS IDs from search
+            batch_size: Number of IDs to fetch per request (max ~100 to avoid URL length issues)
 
         Returns:
             List of dataset records
@@ -65,25 +68,41 @@ class GEOFetcher:
         if not gds_ids:
             return []
 
-        params = {
-            "db": "gds",
-            "id": ",".join(gds_ids),
-            "retmode": "xml",
-            "email": self.email
-        }
+        all_datasets = []
 
-        response = requests.get(f"{self.BASE_URL}/esummary.fcgi", params=params)
-        response.raise_for_status()
+        # Process in batches to avoid 414 URI Too Long errors
+        for i in range(0, len(gds_ids), batch_size):
+            batch = gds_ids[i:i + batch_size]
 
-        root = ET.fromstring(response.content)
-        datasets = []
+            params = {
+                "db": "gds",
+                "id": ",".join(batch),
+                "retmode": "xml",
+                "email": self.email,
+                "api_key": self.api_key
+            }
 
-        for doc in root.findall(".//DocSum"):
-            record = self._parse_docsum(doc)
-            if record:
-                datasets.append(record)
+            try:
+                response = requests.get(f"{self.BASE_URL}/esummary.fcgi", params=params)
+                response.raise_for_status()
 
-        return datasets
+                root = ET.fromstring(response.content)
+
+                for doc in root.findall(".//DocSum"):
+                    record = self._parse_docsum(doc)
+                    if record:
+                        all_datasets.append(record)
+
+                # Rate limiting (10 req/sec with API key)
+                if i + batch_size < len(gds_ids):
+                    time.sleep(0.1)
+
+            except Exception as e:
+                print(f"   Error fetching batch {i//batch_size + 1}: {e}")
+                time.sleep(1)
+                continue
+
+        return all_datasets
 
     def _parse_docsum(self, doc: ET.Element) -> Optional[Dict[str, Any]]:
         """Parse a DocSum element from GEO."""
@@ -221,11 +240,11 @@ def ingest_geo_data(
     # Prepare for indexing
     documents = [s["description"] for s in samples]
     metadatas = [{
-        "accession": s["accession"],
-        "title": s["title"][:200] if s["title"] else "",
-        "organism": s["organism"],
-        "experiment_type": s["experiment_type"],
-        "n_samples": s["n_samples"]
+        "accession": s["accession"] or "",
+        "title": (s["title"][:200] if s["title"] else ""),
+        "organism": s["organism"] or "",
+        "experiment_type": s["experiment_type"] or "",
+        "n_samples": s["n_samples"] or ""
     } for s in samples]
     ids = [f"geo_{s['accession']}" for s in samples]
 
@@ -313,15 +332,126 @@ def demo_experiment_search(collection_name: str = "geo_experiments"):
             print(f"     Organism: {organism} | Type: {exp_type}")
 
 
-if __name__ == "__main__":
-    # Ingest cancer-related gene expression experiments
-    stats = ingest_geo_data(
-        query="cancer gene expression RNA-seq",
-        max_datasets=75,
-        collection_name="geo_experiments"
-    )
-    print(f"\nIngestion stats: {stats}")
+def large_scale_geo_ingestion(target_datasets: int = 50000):
+    """
+    Large-scale ingestion of GEO experimental data.
+    Fetches from multiple research areas to build a comprehensive experiment database.
 
-    # Demo search
-    time.sleep(1)
-    demo_experiment_search("geo_experiments")
+    Args:
+        target_datasets: Target number of datasets to ingest
+    """
+    # Diverse experimental queries
+    queries = [
+        # Cancer types
+        "breast cancer RNA-seq",
+        "lung cancer gene expression",
+        "leukemia transcriptome",
+        "melanoma expression profiling",
+        "pancreatic cancer microarray",
+        "prostate cancer genomics",
+        "colorectal cancer RNA-seq",
+        "ovarian cancer expression",
+        "glioblastoma transcriptome",
+        "lymphoma gene expression",
+        # Technology types
+        "single cell RNA-seq",
+        "bulk RNA sequencing",
+        "microarray expression",
+        "ChIP-seq histone",
+        "ATAC-seq chromatin",
+        "methylation array",
+        "proteomics mass spectrometry",
+        "metabolomics",
+        # Research areas
+        "drug resistance cancer",
+        "immunotherapy response",
+        "tumor microenvironment",
+        "metastasis gene expression",
+        "cancer stem cells",
+        "drug treatment response",
+        "CRISPR screen",
+        "knockout gene expression",
+        # Model systems
+        "patient derived xenograft",
+        "cell line expression",
+        "organoid RNA-seq",
+        "mouse tumor model",
+        "human primary tumor",
+        # Specific pathways/genes
+        "BRCA1 BRCA2 expression",
+        "TP53 mutation expression",
+        "KRAS signaling",
+        "MYC amplification",
+        "immune checkpoint",
+        "PD-1 PD-L1",
+        # Clinical
+        "treatment naive cancer",
+        "chemotherapy resistance",
+        "radiation response",
+        "targeted therapy response",
+        "clinical trial expression",
+        # Other diseases
+        "Alzheimer disease brain",
+        "Parkinson disease expression",
+        "diabetes gene expression",
+        "cardiovascular disease",
+        "autoimmune disease expression",
+        "infectious disease response",
+    ]
+
+    datasets_per_query = max(target_datasets // len(queries), 200)
+    total_indexed = 0
+
+    print("=" * 70)
+    print(f"LARGE-SCALE GEO INGESTION")
+    print(f"Target: {target_datasets:,} datasets")
+    print(f"Queries: {len(queries)}")
+    print(f"Datasets per query: {datasets_per_query}")
+    print("=" * 70)
+
+    for i, query in enumerate(queries):
+        print(f"\n[{i+1}/{len(queries)}] Processing query: '{query}'")
+        try:
+            stats = ingest_geo_data(
+                query=query,
+                max_datasets=datasets_per_query,
+                collection_name="geo_experiments"
+            )
+            total_indexed = stats.get("total_documents", total_indexed)
+            print(f"   Total indexed so far: {total_indexed:,}")
+
+            # Rate limiting
+            time.sleep(0.5)
+
+        except Exception as e:
+            print(f"   Error with query '{query}': {e}")
+            time.sleep(2)
+            continue
+
+    print("\n" + "=" * 70)
+    print(f"LARGE-SCALE GEO INGESTION COMPLETE")
+    print(f"Total datasets indexed: {total_indexed:,}")
+    print("=" * 70)
+
+    return total_indexed
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--large":
+        # Large-scale ingestion mode
+        target = int(sys.argv[2]) if len(sys.argv) > 2 else 50000
+        large_scale_geo_ingestion(target_datasets=target)
+    else:
+        # Default: smaller ingestion for testing
+        stats = ingest_geo_data(
+            query="cancer gene expression RNA-seq",
+            max_datasets=100,
+            collection_name="geo_experiments"
+        )
+        print(f"\nIngestion stats: {stats}")
+
+        # Demo search
+        time.sleep(1)
+        demo_experiment_search("geo_experiments")

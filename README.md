@@ -60,10 +60,16 @@ pip install transformers sentence-transformers chromadb fastapi uvicorn requests
 ### 2. Ingest Data
 
 ```bash
+# Small-scale ingestion for testing
 python ingest_pubmed.py
+python ingest_geo.py
+
+# Large-scale ingestion (builds full dataset)
+python ingest_pubmed.py --large 100000
+python ingest_geo.py --large 50000
 ```
 
-This fetches ~100 cancer genomics papers from PubMed and indexes them.
+The large-scale ingestion fetches from 48+ diverse biomedical queries to build a comprehensive corpus.
 
 ### 3. Run Demo
 
@@ -110,16 +116,26 @@ curl -X POST "http://localhost:8000/search" \
   -d '{"query": "What genes are linked to breast cancer?", "n_results": 5}'
 ```
 
+## Dataset Statistics
+
+| Data Source | Documents Indexed |
+|-------------|-------------------|
+| PubMed Abstracts | 64,753 |
+| GEO Experiments | 10,462 |
+| **Total** | **75,215** |
+
 ## Evaluation Results
 
-On 98 indexed PubMed abstracts:
+Evaluated using synthetic relevance judgments (keyword-based pseudo-labels):
 
-| Metric | K=5 |
-|--------|-----|
-| Precision@K | 0.90 |
-| Recall@K | 0.17 |
-| MRR | 0.75 |
-| NDCG@K | 0.83 |
+| Metric | K=5 | Description |
+|--------|-----|-------------|
+| Precision@K | 1.00 | All top-5 results contain target keywords |
+| Recall@K | 0.0007 | 5 retrieved out of ~7,000 matching docs |
+| MRR | 1.00 | First result is always relevant |
+| NDCG@K | 1.00 | Perfect ranking within top-5 |
+
+*Note: High precision is expected with keyword-based relevance on a large corpus. For production use, human relevance judgments would provide more meaningful evaluation.*
 
 ## Key Concepts Demonstrated
 

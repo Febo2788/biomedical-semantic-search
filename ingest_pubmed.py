@@ -21,14 +21,16 @@ class PubMedFetcher:
 
     BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 
-    def __init__(self, email: str = "user@example.com"):
+    def __init__(self, email: str = "felix.borrego02@gmail.com", api_key: str = "745f2b98fc7384ec80b6c74e4636087a2508"):
         """
         Initialize the fetcher.
 
         Args:
             email: Email for NCBI API (required by their terms of service)
+            api_key: NCBI API key for higher rate limits (10 req/sec)
         """
         self.email = email
+        self.api_key = api_key
 
     def search(self, query: str, max_results: int = 100) -> List[str]:
         """
@@ -46,7 +48,8 @@ class PubMedFetcher:
             "term": query,
             "retmax": max_results,
             "retmode": "json",
-            "email": self.email
+            "email": self.email,
+            "api_key": self.api_key
         }
 
         response = requests.get(f"{self.BASE_URL}/esearch.fcgi", params=params)
@@ -57,12 +60,13 @@ class PubMedFetcher:
 
         return pmids
 
-    def fetch_abstracts(self, pmids: List[str]) -> List[Dict[str, Any]]:
+    def fetch_abstracts(self, pmids: List[str], batch_size: int = 200) -> List[Dict[str, Any]]:
         """
-        Fetch full records for given PMIDs.
+        Fetch full records for given PMIDs with batching for large requests.
 
         Args:
             pmids: List of PubMed IDs
+            batch_size: Number of PMIDs to fetch per request (max ~200 recommended)
 
         Returns:
             List of article records with title, abstract, metadata
@@ -70,26 +74,42 @@ class PubMedFetcher:
         if not pmids:
             return []
 
-        params = {
-            "db": "pubmed",
-            "id": ",".join(pmids),
-            "retmode": "xml",
-            "email": self.email
-        }
+        all_articles = []
 
-        response = requests.get(f"{self.BASE_URL}/efetch.fcgi", params=params)
-        response.raise_for_status()
+        # Process in batches
+        for i in range(0, len(pmids), batch_size):
+            batch = pmids[i:i + batch_size]
 
-        # Parse XML response
-        root = ET.fromstring(response.content)
-        articles = []
+            params = {
+                "db": "pubmed",
+                "id": ",".join(batch),
+                "retmode": "xml",
+                "email": self.email,
+                "api_key": self.api_key
+            }
 
-        for article in root.findall(".//PubmedArticle"):
-            record = self._parse_article(article)
-            if record and record.get("abstract"):  # Only include articles with abstracts
-                articles.append(record)
+            try:
+                response = requests.get(f"{self.BASE_URL}/efetch.fcgi", params=params)
+                response.raise_for_status()
 
-        return articles
+                # Parse XML response
+                root = ET.fromstring(response.content)
+
+                for article in root.findall(".//PubmedArticle"):
+                    record = self._parse_article(article)
+                    if record and record.get("abstract"):
+                        all_articles.append(record)
+
+                # Rate limiting between batches (10 req/sec with API key)
+                if i + batch_size < len(pmids):
+                    time.sleep(0.1)
+
+            except Exception as e:
+                print(f"   Error fetching batch {i//batch_size + 1}: {e}")
+                time.sleep(1)
+                continue
+
+        return all_articles
 
     def _parse_article(self, article: ET.Element) -> Optional[Dict[str, Any]]:
         """Parse a single article from XML."""
@@ -196,10 +216,10 @@ def ingest_pubmed_data(
         documents.append(text)
 
         metadata = {
-            "pmid": article["pmid"],
-            "title": article["title"],
-            "year": article["year"],
-            "journal": article["journal"],
+            "pmid": article["pmid"] or "",
+            "title": article["title"] or "",
+            "year": article["year"] if article["year"] else 0,
+            "journal": article["journal"] or "",
             "keywords": ", ".join(article["keywords"]) if article["keywords"] else ""
         }
         metadatas.append(metadata)
@@ -278,15 +298,126 @@ def demo_search(collection_name: str = "pubmed_abstracts"):
             print(f"     Year: {year} | PMID: {meta.get('pmid', 'N/A')}")
 
 
-if __name__ == "__main__":
-    # Example: Ingest cancer genomics articles
-    stats = ingest_pubmed_data(
-        query="cancer genomics machine learning",
-        max_articles=30,
-        collection_name="pubmed_abstracts"
-    )
-    print(f"\nIngestion stats: {stats}")
+def large_scale_ingestion(target_articles: int = 100000):
+    """
+    Large-scale ingestion of PubMed data.
+    Fetches from multiple biomedical topic areas to build a comprehensive corpus.
 
-    # Demo search
-    time.sleep(1)  # Brief pause
-    demo_search("pubmed_abstracts")
+    Args:
+        target_articles: Target number of articles to ingest
+    """
+    # Diverse biomedical queries to build a comprehensive corpus
+    queries = [
+        # Cancer research
+        "cancer genomics",
+        "cancer immunotherapy",
+        "cancer drug resistance",
+        "cancer biomarkers",
+        "breast cancer treatment",
+        "lung cancer therapy",
+        "leukemia treatment",
+        "melanoma immunotherapy",
+        "pancreatic cancer",
+        "prostate cancer genomics",
+        # Genomics & Genetics
+        "CRISPR gene editing",
+        "gene expression profiling",
+        "single cell RNA sequencing",
+        "whole genome sequencing",
+        "epigenetics cancer",
+        "transcriptomics analysis",
+        "proteomics biomarkers",
+        "metabolomics disease",
+        # Drug Discovery
+        "drug discovery machine learning",
+        "drug target identification",
+        "pharmacogenomics",
+        "clinical trials oncology",
+        "precision medicine",
+        "targeted therapy",
+        # AI/ML in Biomedicine
+        "machine learning cancer diagnosis",
+        "deep learning medical imaging",
+        "artificial intelligence drug discovery",
+        "neural networks genomics",
+        "computational biology",
+        "bioinformatics analysis",
+        # Specific diseases
+        "Alzheimer disease genetics",
+        "Parkinson disease treatment",
+        "diabetes molecular mechanisms",
+        "cardiovascular disease biomarkers",
+        "autoimmune disease therapy",
+        "infectious disease genomics",
+        # Molecular Biology
+        "protein structure prediction",
+        "molecular pathway analysis",
+        "cell signaling cancer",
+        "apoptosis mechanisms",
+        "tumor microenvironment",
+        "stem cell therapy",
+        # Clinical Research
+        "clinical biomarkers",
+        "disease prognosis prediction",
+        "treatment response prediction",
+        "survival analysis cancer",
+        "patient stratification",
+        "personalized medicine",
+    ]
+
+    articles_per_query = max(target_articles // len(queries), 500)
+    total_indexed = 0
+
+    print("=" * 70)
+    print(f"LARGE-SCALE PUBMED INGESTION")
+    print(f"Target: {target_articles:,} articles")
+    print(f"Queries: {len(queries)}")
+    print(f"Articles per query: {articles_per_query}")
+    print("=" * 70)
+
+    for i, query in enumerate(queries):
+        print(f"\n[{i+1}/{len(queries)}] Processing query: '{query}'")
+        try:
+            stats = ingest_pubmed_data(
+                query=query,
+                max_articles=articles_per_query,
+                collection_name="pubmed_abstracts"
+            )
+            total_indexed = stats.get("total_documents", total_indexed)
+            print(f"   Total indexed so far: {total_indexed:,}")
+
+            # Rate limiting - be nice to NCBI servers
+            time.sleep(0.5)
+
+        except Exception as e:
+            print(f"   Error with query '{query}': {e}")
+            time.sleep(2)
+            continue
+
+    print("\n" + "=" * 70)
+    print(f"LARGE-SCALE INGESTION COMPLETE")
+    print(f"Total articles indexed: {total_indexed:,}")
+    print("=" * 70)
+
+    return total_indexed
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--large":
+        # Large-scale ingestion mode
+        target = int(sys.argv[2]) if len(sys.argv) > 2 else 100000
+        large_scale_ingestion(target_articles=target)
+    else:
+        # Default: smaller ingestion for testing
+        stats = ingest_pubmed_data(
+            query="cancer genomics machine learning",
+            max_articles=100,
+            collection_name="pubmed_abstracts"
+        )
+        print(f"\nIngestion stats: {stats}")
+
+        # Demo search
+        time.sleep(1)
+        demo_search("pubmed_abstracts")

@@ -94,7 +94,7 @@ async def startup_event():
 
     # Literature search store
     store = VectorStore(
-        collection_name="biomedical_docs",
+        collection_name="pubmed_abstracts",
         persist_directory="./chroma_data"
     )
 
