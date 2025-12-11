@@ -4,6 +4,34 @@ A **multimodal semantic search system** for biomedical data that enables retriev
 
 Built to demonstrate AI/ML engineering skills for computational sciences roles in drug discovery and biomedical research.
 
+## Demo
+
+### Semantic Search in Action
+
+The system converts natural language queries into vector embeddings, then finds the most semantically similar documents from a corpus of 75,000+ biomedical records.
+
+![Demo Output](docs/screenshots/demo-output.png)
+
+*The demo shows semantic similarity scoring in action. Notice how "BRCA1 mutations increase breast cancer risk" scores highest (0.47) for the query "Genetic factors in cancer", while an unrelated sentence about weather scores negative (-0.04).*
+
+### REST API
+
+The FastAPI backend provides a production-ready interface for semantic search with interactive documentation.
+
+![API Endpoints](docs/screenshots/api-endpoints.png)
+
+*All endpoints are automatically documented with Swagger UI at `/docs`.*
+
+### Search Interface
+
+Query the literature using natural language:
+
+![Search Query](docs/screenshots/search-query.png)
+
+![Search Results](docs/screenshots/search-results.png)
+
+*Each result includes a similarity score (0-1) indicating semantic relevance to the query.*
+
 ## Features
 
 - **Multimodal Search**: Query both papers AND experimental datasets
@@ -24,6 +52,14 @@ Built to demonstrate AI/ML engineering skills for computational sciences roles i
 | API | FastAPI, Uvicorn |
 | Literature Data | PubMed E-utilities API |
 | Experimental Data | NCBI GEO API |
+
+## Dataset Statistics
+
+| Data Source | Documents Indexed |
+|-------------|-------------------|
+| PubMed Abstracts | 64,753 |
+| GEO Experiments | 10,462 |
+| **Total** | **75,215** |
 
 ## Project Structure
 
@@ -116,13 +152,23 @@ curl -X POST "http://localhost:8000/search" \
   -d '{"query": "What genes are linked to breast cancer?", "n_results": 5}'
 ```
 
-## Dataset Statistics
+## How It Works
 
-| Data Source | Documents Indexed |
-|-------------|-------------------|
-| PubMed Abstracts | 64,753 |
-| GEO Experiments | 10,462 |
-| **Total** | **75,215** |
+### 1. Embedding Pipeline (`embeddings.py`)
+Text is converted to 384-dimensional vectors using Sentence-Transformers. The model (`all-MiniLM-L6-v2`) captures semantic meaning, so "cancer treatment" and "tumor therapy" are recognized as similar even without shared keywords.
+
+### 2. Vector Database (`vector_store.py`)
+Embeddings are stored in ChromaDB with HNSW indexing for fast approximate nearest neighbor search. This enables sub-second queries across 75,000+ documents.
+
+### 3. Semantic Search (`api.py`)
+When you search, your query is embedded and compared against all stored vectors. Results are ranked by cosine similarity—documents with similar meaning rank highest.
+
+### 4. Retrieval Evaluation (`evaluation.py`)
+Search quality is measured using standard IR metrics:
+- **Precision@K**: Fraction of top-K results that are relevant
+- **Recall@K**: Fraction of relevant documents retrieved
+- **MRR**: Mean Reciprocal Rank
+- **NDCG@K**: Normalized Discounted Cumulative Gain
 
 ## Evaluation Results
 
@@ -136,33 +182,6 @@ Evaluated using synthetic relevance judgments (keyword-based pseudo-labels):
 | NDCG@K | 1.00 | Perfect ranking within top-5 |
 
 *Note: High precision is expected with keyword-based relevance on a large corpus. For production use, human relevance judgments would provide more meaningful evaluation.*
-
-## Key Concepts Demonstrated
-
-### 1. Embedding Pipeline (`embeddings.py`)
-- Load pre-trained transformer models from Hugging Face
-- Generate dense vector representations of text
-- Batch processing for efficiency
-- L2 normalization for cosine similarity
-
-### 2. Vector Database (`vector_store.py`)
-- Store embeddings with ChromaDB
-- HNSW index for fast approximate nearest neighbor search
-- Metadata filtering (by year, topic, etc.)
-- Persistent storage
-
-### 3. Semantic Search (`api.py`)
-- Query encoding → vector similarity search
-- Distance to similarity conversion
-- Filtered search by metadata
-- RESTful API design
-
-### 4. Retrieval Evaluation (`evaluation.py`)
-- Precision@K: Fraction of retrieved docs that are relevant
-- Recall@K: Fraction of relevant docs retrieved
-- MRR: Mean Reciprocal Rank
-- NDCG: Normalized Discounted Cumulative Gain
-
 
 ## Author
 
