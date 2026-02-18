@@ -2,8 +2,6 @@
 
 A **multimodal semantic search system** for biomedical data that enables retrieval based on **meaning rather than metadata**. Scientists can search both literature AND experimental data using natural language queries.
 
-Built to demonstrate AI/ML engineering skills for computational sciences roles in drug discovery and biomedical research.
-
 ## Demo
 
 ### Semantic Search in Action
