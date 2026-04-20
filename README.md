@@ -20,13 +20,6 @@ The system converts natural language queries into vector embeddings, then finds 
 
 *The demo shows semantic similarity scoring in action. Notice how "BRCA1 mutations increase breast cancer risk" scores highest (0.47) for the query "Genetic factors in cancer", while an unrelated sentence about weather scores negative (-0.04).*
 
-### REST API
-
-The FastAPI backend provides a production-ready interface for semantic search with interactive documentation.
-
-![API Endpoints](docs/screenshots/api-endpoints.png)
-
-*All endpoints are automatically documented with Swagger UI at `/docs`.*
 
 ## Features
 
