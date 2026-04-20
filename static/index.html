@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Biomedical Semantic Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        oklch(98% 0.005 85);
+    --bg-sunk:   oklch(96% 0.006 85);
+    --ink:       oklch(22% 0.01 270);
+    --ink-soft:  oklch(42% 0.01 270);
+    --ink-mute:  oklch(62% 0.01 270);
+    --rule:      oklch(88% 0.008 270);
+    --rule-soft: oklch(93% 0.006 270);
+    --accent:    oklch(52% 0.09 200);
+    --accent-2:  oklch(55% 0.09 40);
+    --accent-wash: oklch(94% 0.02 200);
+    --accent-2-wash: oklch(95% 0.02 40);
+    --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+
+  .topbar {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 22px 40px 18px; border-bottom: 1px solid var(--rule);
+  }
+  .wordmark { font-family: var(--serif); font-weight: 500; font-size: 19px; letter-spacing: -0.01em; }
+  .wordmark em { font-style: italic; color: var(--ink-soft); font-weight: 400; }
+  .topbar .meta { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: 0.02em; }
+  .topbar .meta .dot { color: var(--accent); }
+  .topbar .meta.is-off .dot { color: var(--accent-2); }
+
+  main { max-width: 880px; margin: 0 auto; padding: 64px 40px 120px; }
+
+  .hero h1 {
+    font-family: var(--serif); font-weight: 400; font-size: 46px;
+    line-height: 1.08; letter-spacing: -0.022em; margin: 0 0 12px; text-wrap: pretty;
+  }
+  .hero h1 em { font-style: italic; color: var(--accent); }
+  .hero .lede { color: var(--ink-soft); max-width: 52ch; font-size: 16px; margin: 0 0 40px; }
+
+  .search {
+    position: relative; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+    padding: 18px 0 16px; display: flex; align-items: center; gap: 12px;
+  }
+  .search .prompt {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-mute);
+    letter-spacing: 0.06em; padding-top: 3px;
+  }
+  .search input {
+    flex: 1; border: 0; background: transparent; font-family: var(--serif);
+    font-size: 22px; color: var(--ink); padding: 4px 0; outline: none; letter-spacing: -0.01em;
+  }
+  .search input::placeholder { color: var(--ink-mute); font-style: italic; }
+  .search .kbd {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-mute);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 2px 6px; background: var(--bg-sunk);
+  }
+
+  .facets { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 0; font-size: 13px; color: var(--ink-soft); }
+  .chips { display: flex; gap: 6px; }
+  .chip {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px;
+    background: transparent; color: var(--ink-soft); cursor: pointer; transition: all .12s ease;
+  }
+  .chip:hover { border-color: var(--ink-soft); color: var(--ink); }
+  .chip.is-on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .facets .count { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: 0.04em; }
+
+  .summary {
+    margin-top: 48px; padding-bottom: 14px; border-bottom: 1px solid var(--rule);
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .summary .q { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--ink-soft); }
+  .summary .q span { color: var(--ink); font-style: normal; font-weight: 500; }
+  .summary .sort { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: 0.04em; }
+  .summary .sort b { color: var(--ink); font-weight: 500; }
+
+  .result {
+    padding: 28px 0; border-bottom: 1px solid var(--rule-soft);
+    display: grid; grid-template-columns: 72px 1fr 140px; gap: 28px; align-items: start;
+  }
+  .result:last-child { border-bottom: 0; }
+  .r-index { font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: 0.06em; padding-top: 4px; }
+
+  .r-body .r-kind {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; display: inline-block; padding: 2px 8px; border-radius: 2px; margin-bottom: 10px;
+  }
+  .r-kind.literature { background: var(--accent-wash); color: var(--accent); }
+  .r-kind.experiment { background: var(--accent-2-wash); color: var(--accent-2); }
+
+  .r-title {
+    font-family: var(--serif); font-size: 20px; line-height: 1.3; font-weight: 500;
+    letter-spacing: -0.01em; margin: 0 0 8px; color: var(--ink); text-wrap: balance;
+  }
+  .r-snippet { color: var(--ink-soft); font-size: 14.5px; margin: 0 0 12px; max-width: 60ch; }
+  .r-meta {
+    display: flex; flex-wrap: wrap; gap: 18px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-mute); letter-spacing: 0.02em;
+  }
+  .r-meta span b { color: var(--ink-soft); font-weight: 500; }
+
+  .r-sim { text-align: right; padding-top: 4px; }
+  .r-sim .val { font-family: var(--mono); font-size: 18px; color: var(--ink); letter-spacing: -0.01em; font-weight: 500; }
+  .r-sim .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: 6px; }
+  .r-sim .bar { margin-top: 8px; height: 2px; background: var(--rule); position: relative; }
+  .r-sim .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); display: block; }
+  .result[data-kind="experiment"] .r-sim .bar > i { background: var(--accent-2); }
+  .result[data-kind="literature"] .r-sim .bar > i { background: var(--accent); }
+
+  .state {
+    padding: 60px 0; text-align: center; color: var(--ink-mute);
+    font-family: var(--serif); font-style: italic; font-size: 18px;
+  }
+  .state.err { color: var(--accent-2); font-style: normal; font-family: var(--mono); font-size: 13px; }
+
+  .rail {
+    margin-top: 80px; padding-top: 22px; border-top: 1px solid var(--rule);
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; font-size: 12px; color: var(--ink-mute);
+  }
+  .rail .kpi .n {
+    font-family: var(--serif); font-size: 22px; color: var(--ink);
+    display: block; margin-bottom: 2px; letter-spacing: -0.01em;
+  }
+  .rail .kpi .l { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  @media (max-width: 680px) {
+    main { padding: 40px 22px 80px; }
+    .hero h1 { font-size: 34px; }
+    .result { grid-template-columns: 1fr; gap: 14px; }
+    .r-index { display: none; }
+    .r-sim { text-align: left; }
+    .r-sim .bar { max-width: 160px; }
+    .topbar { padding: 16px 22px; }
+    .rail { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wordmark">Semantic Search <em>— biomedical corpus</em></div>
+  <div class="meta" id="status"><span class="dot">●</span> <span id="status-text">connecting…</span></div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <h1>Retrieve papers and experiments<br>by <em>meaning</em>, not metadata.</h1>
+    <p class="lede">Query across PubMed abstracts and NCBI GEO gene-expression studies using natural language. Results are ranked by cosine similarity to your query's 384-dimensional embedding.</p>
+
+    <form class="search" id="search-form">
+      <span class="prompt">QUERY ›</span>
+      <input id="q" type="text" placeholder="e.g. single cell RNA-seq tumor microenvironment" autocomplete="off" spellcheck="false" />
+      <span class="kbd">⏎</span>
+    </form>
+
+    <div class="facets">
+      <div class="chips">
+        <button class="chip is-on" data-filter="all">All</button>
+        <button class="chip" data-filter="literature">Literature</button>
+        <button class="chip" data-filter="experiment">Experiments</button>
+      </div>
+      <div class="count" id="count">—</div>
+    </div>
+  </section>
+
+  <section class="summary" id="summary" style="display:none">
+    <div class="q">Results for <span id="summary-q"></span></div>
+    <div class="sort">SORT · <b>similarity ↓</b></div>
+  </section>
+
+  <div id="results"></div>
+
+  <section class="rail" id="rail">
+    <div class="kpi"><span class="n" id="kpi-lit">—</span><span class="l">PubMed abstracts</span></div>
+    <div class="kpi"><span class="n" id="kpi-exp">—</span><span class="l">GEO experiments</span></div>
+    <div class="kpi"><span class="n">384</span><span class="l">embedding dims</span></div>
+    <div class="kpi"><span class="n">MiniLM-L6</span><span class="l">encoder</span></div>
+  </section>
+
+</main>
+
+<script>
+  // ---------- config ----------
+  // If you open this file via FastAPI at http://localhost:8000/ this empty string works.
+  // If you're viewing the HTML directly (file://...) change this to "http://localhost:8000"
+  const API_BASE = "";
+
+  // ---------- state ----------
+  let allResults = [];
+  let currentFilter = "all";
+
+  // ---------- helpers ----------
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function highlight(text, query) {
+    if (!query) return esc(text);
+    const terms = query.split(/\s+/).filter(t => t.length > 2);
+    let out = esc(text);
+    terms.forEach(t => {
+      const re = new RegExp("(" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+      out = out.replace(re, "<mark>$1</mark>");
+    });
+    return out;
+  }
+
+  function titleFromDoc(doc, meta) {
+    if (meta?.title) return meta.title;
+    // fallback: first sentence, or first 90 chars
+    const firstSentence = doc.split(/(?<=[.!?])\s/)[0];
+    return (firstSentence.length > 120 ? doc.slice(0, 120) + "…" : firstSentence);
+  }
+
+  function snippetFromDoc(doc, meta) {
+    // if we used the doc as the title, take the next bit; otherwise take first ~280 chars
+    const start = meta?.title ? 0 : Math.min(160, doc.length);
+    const slice = doc.slice(start, start + 280);
+    return slice + (doc.length > start + 280 ? "…" : "");
+  }
+
+  function renderResult(r, i, query) {
+    const isLit = r.kind === "literature";
+    const m = r.metadata || {};
+    const title = titleFromDoc(r.document, m);
+    const snippet = snippetFromDoc(r.document, m);
+    const pct = Math.max(0, Math.min(100, r.similarity * 100)).toFixed(1);
+
+    // Build meta line depending on kind
+    const metaBits = [];
+    if (isLit) {
+      if (m.pmid)       metaBits.push(`<span><b>pmid</b> ${esc(m.pmid)}</span>`);
+      if (m.journal)    metaBits.push(`<span><b>journal</b> ${esc(m.journal)}</span>`);
+      if (m.year)       metaBits.push(`<span><b>year</b> ${esc(m.year)}</span>`);
+      if (m.authors)    metaBits.push(`<span><b>authors</b> ${esc(m.authors)}</span>`);
+    } else {
+      if (m.accession)       metaBits.push(`<span><b>accession</b> ${esc(m.accession)}</span>`);
+      if (m.organism)        metaBits.push(`<span><b>organism</b> ${esc(m.organism)}</span>`);
+      if (m.n_samples)       metaBits.push(`<span><b>samples</b> ${esc(m.n_samples)}</span>`);
+      if (m.experiment_type) metaBits.push(`<span><b>platform</b> ${esc(m.experiment_type)}</span>`);
+    }
+
+    return `
+      <article class="result" data-kind="${r.kind}">
+        <div class="r-index">${String(i + 1).padStart(2, "0")}</div>
+        <div class="r-body">
+          <span class="r-kind ${r.kind}">${isLit ? "Literature · PubMed" : "Experiment · GEO"}</span>
+          <h2 class="r-title">${highlight(title, query)}</h2>
+          <p class="r-snippet">${highlight(snippet, query)}</p>
+          <div class="r-meta">${metaBits.join("")}</div>
+        </div>
+        <div class="r-sim">
+          <div class="label">similarity</div>
+          <div class="val">${r.similarity.toFixed(4)}</div>
+          <div class="bar"><i style="width:${pct}%"></i></div>
+        </div>
+      </article>`;
+  }
+
+  function paint() {
+    const filtered = currentFilter === "all" ? allResults : allResults.filter(r => r.kind === currentFilter);
+    const q = $("#q").value.trim();
+
+    if (filtered.length === 0) {
+      $("#results").innerHTML = `<div class="state">No results for that filter.</div>`;
+    } else {
+      $("#results").innerHTML = filtered.map((r, i) => renderResult(r, i, q)).join("");
+    }
+
+    // counts
+    const lit = allResults.filter(r => r.kind === "literature").length;
+    const exp = allResults.filter(r => r.kind === "experiment").length;
+    document.querySelectorAll(".chip").forEach(c => {
+      const f = c.dataset.filter;
+      const n = f === "all" ? allResults.length : f === "literature" ? lit : exp;
+      c.textContent = (f[0].toUpperCase() + f.slice(1)) + " · " + n;
+    });
+  }
+
+  // ---------- api ----------
+  async function checkStatus() {
+    try {
+      const [litStats, expStats] = await Promise.all([
+        fetch(API_BASE + "/stats").then(r => r.json()),
+        fetch(API_BASE + "/stats/experiments").then(r => r.json())
+      ]);
+      $("#kpi-lit").textContent = (litStats.document_count || 0).toLocaleString();
+      $("#kpi-exp").textContent = (expStats.experiment_count || 0).toLocaleString();
+      const total = (litStats.document_count || 0) + (expStats.experiment_count || 0);
+      $("#status-text").textContent = `index online · ${total.toLocaleString()} records`;
+    } catch (e) {
+      $("#status").classList.add("is-off");
+      $("#status-text").textContent = "API offline — start the server";
+    }
+  }
+
+  async function runSearch(query) {
+    if (!query.trim()) return;
+    $("#summary").style.display = "flex";
+    $("#summary-q").textContent = `"${query}"`;
+    $("#results").innerHTML = `<div class="state">Searching…</div>`;
+    $("#count").textContent = "…";
+
+    const t0 = performance.now();
+    try {
+      const [litRes, expRes] = await Promise.all([
+        fetch(API_BASE + "/search?q=" + encodeURIComponent(query) + "&n=5").then(r => r.json()),
+        fetch(API_BASE + "/search/experiments?q=" + encodeURIComponent(query) + "&n=5").then(r => r.json())
+      ]);
+
+      const lit = (litRes.results || []).map(r => ({...r, kind: "literature"}));
+      const exp = (expRes.results || []).map(r => ({...r, kind: "experiment"}));
+      allResults = [...lit, ...exp].sort((a, b) => b.similarity - a.similarity).slice(0, 10);
+
+      const ms = Math.round(performance.now() - t0);
+      $("#count").textContent = `TOP ${allResults.length} · ${ms} ms`;
+      paint();
+    } catch (e) {
+      $("#results").innerHTML = `<div class="state err">Search failed: ${esc(e.message)}. Is the API running on localhost:8000?</div>`;
+      $("#count").textContent = "error";
+    }
+  }
+
+  // ---------- events ----------
+  $("#search-form").addEventListener("submit", e => {
+    e.preventDefault();
+    runSearch($("#q").value);
+  });
+
+  document.querySelectorAll(".chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("is-on"));
+      chip.classList.add("is-on");
+      currentFilter = chip.dataset.filter;
+      if (allResults.length) paint();
+    });
+  });
+
+  // ---------- init ----------
+  checkStatus();
+  $("#q").focus();
+</script>
+</body>
+</html>

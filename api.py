@@ -3,7 +3,11 @@ FastAPI backend for semantic search.
 Demonstrates: API development, REST endpoints, request/response handling
 """
 
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uvicorn
@@ -63,63 +67,61 @@ class StatsResponse(BaseModel):
 # Initialize FastAPI app
 app = FastAPI(
     title="Biomedical Semantic Search API",
-    description="""
-    A semantic search API for biomedical literature.
-
-    This API enables:
-    - **Semantic Search**: Find documents by meaning, not just keywords
-    - **Document Ingestion**: Add documents with metadata
-    - **Filtered Search**: Filter results by metadata fields
-
-    Built with: FastAPI, ChromaDB, Sentence-Transformers
-    """,
+    description="Semantic search across PubMed and GEO. UI at /, API docs at /docs.",
     version="1.0.0"
+)
+
+# Allow the frontend to call the API even if opened from a file:// or another origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Global instances (initialized on startup)
 embedder: Optional[EmbeddingPipeline] = None
 store: Optional[VectorStore] = None
-
-
-# Additional store for GEO experiments
 geo_store: Optional[VectorStore] = None
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize ML models and vector stores on startup."""
     global embedder, store, geo_store
     print("Initializing semantic search API...")
     embedder = EmbeddingPipeline("all-MiniLM-L6-v2")
-
-    # Literature search store
-    store = VectorStore(
-        collection_name="pubmed_abstracts",
-        persist_directory="./chroma_data"
-    )
-
-    # Experimental data store
-    geo_store = VectorStore(
-        collection_name="geo_experiments",
-        persist_directory="./chroma_data"
-    )
-
+    store = VectorStore(collection_name="pubmed_abstracts", persist_directory="./chroma_data")
+    geo_store = VectorStore(collection_name="geo_experiments", persist_directory="./chroma_data")
     print(f"Loaded {store.count()} papers, {geo_store.count()} experiments")
-    print("API ready!")
+    print("API ready! Open http://localhost:8000/")
 
 
-@app.get("/", tags=["Health"])
-async def root():
-    """Health check endpoint."""
-    return {"status": "healthy", "message": "Biomedical Semantic Search API"}
+# ---------- Frontend ----------
+# Serve the custom search UI from /static and make "/" return index.html.
+STATIC_DIR = Path(__file__).parent / "static"
+
+@app.get("/", include_in_schema=False)
+async def homepage():
+    index = STATIC_DIR / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    return {"status": "healthy", "message": "UI not installed — expected static/index.html"}
+
+# Mount any other static assets (if you add CSS/JS files later)
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ---------- Health ----------
+@app.get("/health", tags=["Health"])
+async def health():
+    return {"status": "healthy"}
 
 
 @app.get("/stats", response_model=StatsResponse, tags=["Info"])
 async def get_stats():
-    """Get statistics about the search index."""
     if store is None or embedder is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
     stats = store.get_stats()
     return StatsResponse(
         collection_name=stats["collection_name"],
@@ -129,100 +131,55 @@ async def get_stats():
     )
 
 
+# ---------- Documents ----------
 @app.post("/documents", tags=["Documents"])
 async def add_document(doc: DocumentInput):
-    """
-    Add a single document to the search index.
-
-    The document will be embedded and stored for semantic search.
-    """
     if store is None or embedder is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
-    # Generate embedding
     embedding = embedder.encode(doc.text, show_progress=False).tolist()[0]
-
-    # Add to store
     store.add_documents(
         documents=[doc.text],
         embeddings=[embedding],
         metadatas=[doc.metadata] if doc.metadata else None
     )
-
-    return {
-        "status": "success",
-        "message": "Document added",
-        "document_count": store.count()
-    }
+    return {"status": "success", "message": "Document added", "document_count": store.count()}
 
 
 @app.post("/documents/batch", tags=["Documents"])
 async def add_documents_batch(batch: BatchDocumentInput):
-    """
-    Add multiple documents to the search index.
-
-    More efficient than adding documents one by one.
-    """
     if store is None or embedder is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
     texts = [doc.text for doc in batch.documents]
     metadatas = [doc.metadata for doc in batch.documents]
-
-    # Generate embeddings in batch
     embeddings = embedder.encode(texts, show_progress=False).tolist()
-
-    # Add to store
     store.add_documents(
         documents=texts,
         embeddings=embeddings,
         metadatas=metadatas if any(metadatas) else None
     )
-
-    return {
-        "status": "success",
-        "message": f"Added {len(texts)} documents",
-        "document_count": store.count()
-    }
+    return {"status": "success", "message": f"Added {len(texts)} documents", "document_count": store.count()}
 
 
+# ---------- Literature search ----------
 @app.post("/search", response_model=SearchResponse, tags=["Search"])
 async def search(request: SearchRequest):
-    """
-    Perform semantic search.
-
-    Returns documents ranked by semantic similarity to the query.
-    Optionally filter by metadata fields.
-    """
     if store is None or embedder is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
     if store.count() == 0:
-        return SearchResponse(
-            query=request.query,
-            results=[],
-            total_results=0
-        )
+        return SearchResponse(query=request.query, results=[], total_results=0)
 
-    # Generate query embedding
     query_embedding = embedder.encode(request.query, show_progress=False).tolist()[0]
-
-    # Search
     results = store.search(
         query_embedding=query_embedding,
         n_results=request.n_results,
         where=request.filter
     )
 
-    # Format results
     search_results = []
     for doc, meta, dist, id_ in zip(
-        results["documents"],
-        results["metadatas"],
-        results["distances"],
-        results["ids"]
+        results["documents"], results["metadatas"], results["distances"], results["ids"]
     ):
-        similarity = 1 - dist  # Convert distance to similarity
+        similarity = 1 - dist
         search_results.append(SearchResult(
             document=doc,
             similarity=round(similarity, 4),
@@ -230,11 +187,7 @@ async def search(request: SearchRequest):
             id=id_
         ))
 
-    return SearchResponse(
-        query=request.query,
-        results=search_results,
-        total_results=len(search_results)
-    )
+    return SearchResponse(query=request.query, results=search_results, total_results=len(search_results))
 
 
 @app.get("/search", response_model=SearchResponse, tags=["Search"])
@@ -242,73 +195,37 @@ async def search_get(
     q: str = Query(..., description="Search query"),
     n: int = Query(default=5, ge=1, le=50, description="Number of results")
 ):
-    """
-    Perform semantic search (GET method for simple queries).
-
-    Example: /search?q=cancer treatment&n=10
-    """
-    request = SearchRequest(query=q, n_results=n)
-    return await search(request)
+    return await search(SearchRequest(query=q, n_results=n))
 
 
-# ============================================================
-# EXPERIMENTAL DATA SEARCH (GEO)
-# ============================================================
-
+# ---------- Experiments search ----------
 @app.post("/search/experiments", response_model=SearchResponse, tags=["Experiments"])
 async def search_experiments(request: SearchRequest):
-    """
-    Search GEO experimental datasets by semantic similarity.
-
-    Find gene expression experiments, RNA-seq studies, and other
-    experimental data based on natural language descriptions.
-
-    Example queries:
-    - "breast cancer drug resistance"
-    - "CRISPR screen in lung cancer"
-    - "single cell RNA-seq tumor microenvironment"
-    """
     if geo_store is None or embedder is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
     if geo_store.count() == 0:
-        return SearchResponse(
-            query=request.query,
-            results=[],
-            total_results=0
-        )
+        return SearchResponse(query=request.query, results=[], total_results=0)
 
-    # Generate query embedding
     query_embedding = embedder.encode(request.query, show_progress=False).tolist()[0]
-
-    # Search experiments
     results = geo_store.search(
         query_embedding=query_embedding,
         n_results=request.n_results,
         where=request.filter
     )
 
-    # Format results
     search_results = []
     for doc, meta, dist, id_ in zip(
-        results["documents"],
-        results["metadatas"],
-        results["distances"],
-        results["ids"]
+        results["documents"], results["metadatas"], results["distances"], results["ids"]
     ):
         similarity = 1 - dist
         search_results.append(SearchResult(
-            document=doc[:500],  # Truncate long descriptions
+            document=doc[:500],
             similarity=round(similarity, 4),
             metadata=meta,
             id=id_
         ))
 
-    return SearchResponse(
-        query=request.query,
-        results=search_results,
-        total_results=len(search_results)
-    )
+    return SearchResponse(query=request.query, results=search_results, total_results=len(search_results))
 
 
 @app.get("/search/experiments", response_model=SearchResponse, tags=["Experiments"])
@@ -316,21 +233,13 @@ async def search_experiments_get(
     q: str = Query(..., description="Search query"),
     n: int = Query(default=5, ge=1, le=50, description="Number of results")
 ):
-    """
-    Search experiments (GET method).
-
-    Example: /search/experiments?q=BRCA1 expression&n=10
-    """
-    request = SearchRequest(query=q, n_results=n)
-    return await search_experiments(request)
+    return await search_experiments(SearchRequest(query=q, n_results=n))
 
 
 @app.get("/stats/experiments", tags=["Experiments"])
 async def get_experiment_stats():
-    """Get statistics about the experimental data index."""
     if geo_store is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
     return {
         "collection_name": "geo_experiments",
         "experiment_count": geo_store.count(),
@@ -340,5 +249,6 @@ async def get_experiment_stats():
 
 if __name__ == "__main__":
     print("Starting Biomedical Semantic Search API...")
-    print("API docs will be available at: http://localhost:8000/docs")
+    print("UI:       http://localhost:8000/")
+    print("API docs: http://localhost:8000/docs")
     uvicorn.run(app, host="0.0.0.0", port=8000)

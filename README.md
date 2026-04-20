@@ -4,6 +4,14 @@ A **multimodal semantic search system** for biomedical data that enables retriev
 
 ## Demo
 
+### Web Search Interface (v2)
+
+A clean search UI served directly by the API at `http://localhost:8000/`. Query PubMed literature and GEO experiments in one place, with similarity scores, keyword highlighting, and response time displayed per search.
+
+![Search UI](docs/screenshots/search-ui.png)
+
+*Searching "tumor suppressor genes in colorectal cancer" returns ranked results across 75,220 indexed records in ~454ms. Top result scores 0.7281 — a direct semantic match.*
+
 ### Semantic Search in Action
 
 The system converts natural language queries into vector embeddings, then finds the most semantically similar documents from a corpus of 75,000+ biomedical records.
@@ -19,16 +27,6 @@ The FastAPI backend provides a production-ready interface for semantic search wi
 ![API Endpoints](docs/screenshots/api-endpoints.png)
 
 *All endpoints are automatically documented with Swagger UI at `/docs`.*
-
-### Search Interface
-
-Query the literature using natural language:
-
-![Search Query](docs/screenshots/search-query.png)
-
-![Search Results](docs/screenshots/search-results.png)
-
-*Each result includes a similarity score (0-1) indicating semantic relevance to the query.*
 
 ## Features
 
@@ -65,7 +63,9 @@ Query the literature using natural language:
 biomedical-semantic-search/
 ├── embeddings.py      # Hugging Face embedding pipeline
 ├── vector_store.py    # ChromaDB vector database
-├── api.py             # FastAPI REST endpoints (multimodal)
+├── api.py             # FastAPI REST endpoints + web UI
+├── static/
+│   └── index.html     # Web search interface (served at /)
 ├── ingest_pubmed.py   # PubMed literature ingestion
 ├── ingest_geo.py      # GEO experimental data ingestion
 ├── evaluation.py      # Retrieval quality metrics
@@ -117,6 +117,7 @@ python main.py demo
 python main.py serve
 ```
 
+Web UI: http://localhost:8000/
 API documentation: http://localhost:8000/docs
 
 ## API Endpoints
@@ -140,7 +141,8 @@ API documentation: http://localhost:8000/docs
 |--------|----------|-------------|
 | POST | `/documents` | Add single document |
 | POST | `/documents/batch` | Add multiple documents |
-| GET | `/` | Health check |
+| GET | `/` | Web search UI |
+| GET | `/health` | Health check |
 
 ### Example Search Request
 
