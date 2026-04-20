@@ -1,10 +1,8 @@
 # Biomedical Semantic Search System
 
-When I'm diving into a new research topic, I run the ingest scripts to pull down a focused corpus of PubMed abstracts — hundreds or thousands at once. Then instead of keyword-searching through them or bouncing between Google Scholar tabs, I just ask questions in plain language: *"what delivery mechanisms are used?"*, *"which studies report off-target effects?"*, *"how does this compare to chemotherapy?"*. The tool ranks abstracts by semantic similarity to my question, so I can scan the most relevant ones in minutes rather than hours.
+This is just a personal tool I built to help me conduct literature reviews faster.
 
-That's the real use case. Google finds pages. This searches meaning across a corpus I already trust.
-
-A personal tool I built to help me conduct literature reviews faster.
+When I'm diving into a new research topic, I run the ingest scripts to pull down a focused corpus of PubMed abstracts — hundreds or thousands at once. Then instead of keyword-searching through them or bouncing between Google Scholar tabs, I just ask questions in plain language: *"what delivery mechanisms are used?"*, *"which studies report off-target effects?"*, *"how does this compare to chemotherapy?"*. The tool ranks abstracts by semantic similarity to my question, so I can scan the most relevant ones in minutes rather than hours by reading papers 1 by 1.
 
 ---
 
