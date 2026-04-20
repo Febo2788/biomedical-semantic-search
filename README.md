@@ -4,6 +4,8 @@ When I'm diving into a new research topic, I run the ingest scripts to pull down
 
 That's the real use case. Google finds pages. This searches meaning across a corpus I already trust.
 
+A personal tool I built to help me conduct literature reviews faster.
+
 ---
 
 A **multimodal semantic search system** for biomedical data that enables retrieval based on **meaning rather than metadata**. Searches both literature and experimental datasets using natural language queries.
